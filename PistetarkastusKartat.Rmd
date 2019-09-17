@@ -1,0 +1,241 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(ggmap)
+library(readxl)
+library(rebus)
+library(ggrepel)
+library(leaflet)
+library(ggthemes)
+library(pander)
+library(knitr)
+library(tinytex)
+library(rmarkdown)
+library(xaringan)
+#library(kableExtra)
+
+```
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, tidy = TRUE)
+```
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+Pistekartoitukset <- read_excel(path = "C:/Users/Rasmusbo/Documents/R_projekti_datalle/VelmuTarkastus/KartoitusData/Pisteet/Pistekartoitukset_2019_Gipson_Ashley.xlsm",
+                              sheet = 1, 
+                              .name_repair = "universal",
+                              skip = 5)
+
+tidyPistekartoitukset <- Pistekartoitukset %>%
+  select(kohteen.nro = 1, # 
+         kohteen.taso = 2, # filtteröintiperuste
+         kohteen.nimi = 4, # *** (Unique)
+         alkukoordinaatti.N = 5, #5-8 vain kokoomalinjoilla (62)
+         alkukoordinaatti.E = 6,
+         pisteen.Id = 11, # Ei käytössä linjoilla
+         kartoitusmenetelma = 12, # *** 21 automaattisesti (If not 21...->)
+         kartoitusmenetelman.tarkennus = 13, # *** snorklaus vai sukellus (If not 13/28 Then)
+         runsausarvioinnin.menetelma = 14, # *** linjoilla 1. Kehikko (If not 5 THen)
+         kohteen.huomautukset = 15, #Tekstikenttä. Ei tarvetta tarkastaa? 
+         otantamenetelma = 16, # *** Satunnaistettu = 5 If not..
+         peittavyyden.arviointi = 17, #peittävyyden arviointi If not then..
+         kartoituskerta = 18,
+         kartoituspvm = 19, #Joku tarkistus? (Unique? DTTM?)
+         kenttahenkilot = 21, #Sukunimi Etunimi (Unique)
+         vene = 22,  #Unique
+         veden.lampotila = 23,
+         lampotilan.mittaussyvyys = 24,
+         secchi.syvyys = 25, #(Unique)
+         levakukinta = 26, #If not 0:3 or NA then..
+         tuulen.suunta = 27, #unique()
+         tuulen.voimakkuus = 28, #Unique()
+         sedimentin.maara = 30, #If not 0:3 or NA then
+         kartoituskerran.huomautukset = 33, 
+         
+         kartoittaja = 43, #Unique()
+         syvyyden.korjaus = 49, #If > 1.5 then ??
+         pohjan.kaltevuus = 63, 
+         arviointiruudun.pinta.ala = 51, #If not 14 or 16 then
+         arviointiruudun.syvyys = 52, # If > 20 or < 0 then 
+         
+         kallio = 71,
+         lohkareab = 72, 
+         lohkarebb = 73,
+         lohkarecb = 74,
+         glasiaalisavi = 75,
+         kivias = 76,
+         liikkumaton.pohja = 77,
+         kivibs = 78,
+         sora = 79,
+         hiekka = 80,
+         siltti = 81,
+         savi = 82,
+         muta = 83,
+         liikkuva.pohja = 84,
+         konkreetiot = 85,
+         hiekkakivi = 86,
+         keinotekoinen.alusta = 87,
+         turve = 88,
+         puun.rungot = 89,
+         pohjanlaadut.yhteensa = 90,
+         epavarma.pohja = 91,
+         
+         roskat.koodisto = 92,
+         roskat.kpl = 93,
+         
+         havainnon.tarkistustarve = 94,  #Tarkista myÃ¶hemmissÃ¤ versioissa "epifyyttinen laji" osuus.. 
+         lajihavainto = 95, # match? lajilistaan?
+         lajin.peittavyys = 96, #If <0,1 or >100 then
+         lajin.lukumaara = 97,
+         lajin.maaran.yksikko = 98,
+         lajin.korkeus = 99,
+         lajihavainnon.laatu = 100,
+         laji.huomautukset = 101)
+
+PisteetForPlotting <- tidyPistekartoitukset %>%
+  filter(!is.na(alkukoordinaatti.N | alkukoordinaatti.E)) %>% #Varmistetaan että kaikilta ruuduilta löytyy koordinaatit, muuten ERROR
+  select(kohteen.nimi, alkukoordinaatti.N, alkukoordinaatti.E, kartoitusmenetelma,  kartoitusmenetelman.tarkennus, kartoituspvm, vene, kartoittaja, arviointiruudun.syvyys, lajihavainto, lajin.peittavyys, lajin.lukumaara, lajin.korkeus, lajihavainnon.laatu, kallio, lohkareab, lohkarebb, lohkarecb, glasiaalisavi, kivias, liikkumaton.pohja, kivibs, sora, hiekka, siltti, savi, muta, liikkuva.pohja, konkreetiot, hiekkakivi, keinotekoinen.alusta, turve, puun.rungot, pohjanlaadut.yhteensa) #pohjia 19
+
+PisteetNested <- PisteetForPlotting %>%
+  arrange(kartoittaja) %>% #Järjestetään kartoittajan mukaan tarkastamisen helpottamiseksi.
+  group_by(kohteen.nimi, alkukoordinaatti.N, alkukoordinaatti.E) %>% # 
+  nest() %>%
+  slice(51:100)
+  # top_n(5, kohteen.nimi) 
+
+#Kehitysehdotus: slice / kartoittaja...? Jokaiselle oma pdf.
+
+```
+---
+title: "Pistemuotoiset kartoitukset"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+---
+
+## Työkalu lajihavaintojen ja sijainnin tarkistamiseen.       
+
+Optimitilanteessa ainakin kaksi tiimin jäsentä olisi aina paikalla käydessänne tätä dokumenttia läpi. 
+Tämä erityisesti siksi, että useampi silmäpari huomaa paremmin mm. kummalliset lajihavainnot ja tuntee alueen erityispiirteet. Vaihtoehtoisesti kukin kartoittaja voi myös tarkastaa ainoastaan omat pisteensä.
+
+## Työjärjestys karttojen tarkistamiseen:
+
+Kartat on järjestetty kartoittajan nimen perusteella aakkosjärjestykseen.
+Tueksi kannattaa ottaa alkuperäinen excel, josta voi tarkistaa tietoja.
+
+1. Sijainnin tarkistus. 
+- Tarkista muistikuvien perusteella onko piste oikeassa paikassa.
+- Epäselvissä tapauksissa sijoita koordinaatit esimerkiksi google mapsiin kokonaiskuvan saamiseksi.
+
+2. Yleiset tiedot
+- Täsmääkö pisteen syvyys sijaintiin?
+
+3. Lajihavaintotiedot
+- Täsmääkö lajihavainnot sijainnin syvyyteen ja ympäristöön?
+- Onko mahdolliset harvinaisemmat lajit todettu näytteestä?
+- Onko skooppailua vaativat lajit määritetty näytehavaintona?
+
+4. Pohjanlaatu ja lajihavainnot
+- Onko lajihavainnot ja peittävyydet mahdollisia / ominaisia kyseisellä pohjanlaadulle?
+
+
+## Mahdolliset virheet ja niiden korjaus
+
+Mikäli tiedoissa on korjattavaa: 
+
+1. Merkitse kartoituspisteen nimi ylös (esim. copy-paste wordiin)
+2. Etsi excelistä kyseinen piste (ctrl + f) ja muuta tarvittavat tiedot
+3. Merkitkää tehdyt korjaukset ylös esim. word-dokumenttiin
+  
+## Kartat
+
+```{r, include=TRUE, results='asis'}
+
+testiFunktioDF = function(taulukko, long, lati, data, drop = F) {
+  for (i in 1:nrow(taulukko)) { 
+  sijainti <- get_map(location = c(taulukko[, long][[1]][i], 
+                                   taulukko[, lati][[1]][i]),
+                      zoom = 15, 
+                      maptype = "hybrid")
+  print((ggmap(sijainti)) +
+    geom_point(aes(x = taulukko[, long][[1]][i], 
+                   y = taulukko[, lati][[1]][i]), 
+               size = 2, 
+               alpha = 0.7, 
+               color = "red") +
+    ggtitle(taulukko$kohteen.nimi[i],
+            subtitle = taulukko$data[[i]][1,5]))
+  
+  cat('\n')
+  print(kable(as.data.frame(taulukko[,data][[1]][i])[1, 1:6], 
+              caption = "Yleiset tiedot",
+              col.names = c("Menetelmä", 
+                            "Tarkennus", 
+                            "Pvm", 
+                            "Vene", 
+                            "Kartoittaja", 
+                            "Ruudun syvyys")))
+  
+  cat('\n')
+  pohjadata <- as.data.frame(taulukko[,data][[1]][i])[1, 12:31]
+  pohjamuok <- pohjadata %>%
+    discard(is.na) %>%
+    kable(caption = "Pohjanlaadut")
+ 
+  print(pohjamuok)
+  
+  
+  cat('\n')
+  print(kable(as.data.frame(taulukko[,data][[1]][i])[7:11], caption = "Lajitiedot",
+              col.names = c("Lajihavainto", 
+                            "Lajin peittävyys", 
+                            "Lukumäärä", 
+                            "Lajin korkeus", 
+                            "Havainnon laatu")))
+  cat('\n')
+  
+
+  
+  
+  #   gather("pohjanlaadut", "prosenttiosuus") %>%
+  #   ggplot(aes(x = pohjanlaadut, y = prosenttiosuus)) +
+  #      geom_bar(aes(fill = pohjanlaadut), position = "stack")
+  #print(kable(as.data.frame(taulukko[,data][[1]][i])[1, 13:31]), 
+  #            caption = "Pohjanlaatu",
+  #            col.names = c("Rock", 
+  #                          "LohkAB", 
+  #                         "LohkBB", 
+  #                          "LohkCB", 
+  #                         "g.savi", 
+  #                          "KiviAS", 
+  #                          "l:maton pohja", 
+  #                          "KiviBS", 
+  #                         "Sora", 
+  #                          "Hiekka", 
+  #                          "Siltti", 
+  #                          "Savi", 
+  #                          "Muta", 
+  #                          "l:va pohja", 
+  #                          "konkre.", 
+  #                          "hiekkakivi", 
+  #                          "k.teko alusta", 
+  #                         "turve", 
+  #                          "puut"))
+  
+  # cat('\n')
+
+  }
+
+
+}
+
+kartat <- testiFunktioDF(PisteetNested, "alkukoordinaatti.E", "alkukoordinaatti.N", "data")
+```
