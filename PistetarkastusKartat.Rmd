@@ -29,7 +29,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, tidy = TRU
 ```
 
 ```{r, echo = FALSE, warning = FALSE, message = FALSE}
-Pistekartoitukset <- read_excel(path = "C:/Users/Rasmusbo/Documents/R_projekti_datalle/VelmuTarkastus/KartoitusData/Pisteet/Pistekartoitukset_2019_Gipson_Ashley.xlsm",
+Pistekartoitukset <- read_excel(path = "PATH_HERE.xlsm",
                               sheet = 1, 
                               .name_repair = "universal",
                               skip = 5)
