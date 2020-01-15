@@ -4,8 +4,11 @@ which are filled by 20+ surveyors. This means that the errors that might occur v
 Basically the quality check consists of 
 
 a) searching for typos (Ulca sp. instead pf Ulva sp...) 
+
 b) searching for methodological errors (cm instead of meters).
+
 c) Searching for outliers (whether they're real observations or errors)
+
 d) Errors in locations or directions.  
 
 To be added 2020
